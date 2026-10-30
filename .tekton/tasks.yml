@@ -1,0 +1,63 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: git-clone
+spec:
+  params:
+    - name: url
+      type: string
+  workspaces:
+    - name: output
+  steps:
+    - name: clone
+      image: alpine/git
+      script: |
+        git clone $(params.url) $(workspaces.output.path)
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: linter
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: lint
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        pip install flake8
+        flake8 service --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: tests
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: run-tests
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        pip install -r requirements.txt
+        pip install nose
+        nosetests -v
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: cleanup
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: clean
+      image: alpine
+      script: |
+        rm -rf $(workspaces.source.path)/*
+        echo "Workspace cleaned up successfully."
